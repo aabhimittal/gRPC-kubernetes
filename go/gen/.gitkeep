@@ -1,0 +1,2 @@
+# Generated Go stubs (inferencev1/*.pb.go) land here at build time.
+# See Makefile: `make gen-go`, or the go/Dockerfile build stage.
