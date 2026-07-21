@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-config
+  namespace: inference
+data:
+  # Batching tunables — see docs/LLD.md §2 & §7.
+  MAX_BATCH: "32"
+  MAX_DELAY_MS: "5"
+  MODEL_VERSION: "v1"
+  PORT: "50051"

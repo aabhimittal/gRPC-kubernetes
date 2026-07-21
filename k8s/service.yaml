@@ -1,0 +1,46 @@
+# Two Services per app (see docs/LLD.md §5):
+#   * ClusterIP  — simple VIP; fine for proxy/L7 load balancing.
+#   * Headless   — exposes pod IPs so gRPC clients using dns:/// + round_robin
+#                  balance requests across pods themselves.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-go
+  namespace: inference
+spec:
+  selector: { app: inference-go }
+  ports:
+    - { name: grpc, port: 50051, targetPort: 50051, protocol: TCP }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-go-headless
+  namespace: inference
+spec:
+  clusterIP: None
+  selector: { app: inference-go }
+  ports:
+    - { name: grpc, port: 50051, targetPort: 50051, protocol: TCP }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-py
+  namespace: inference
+spec:
+  selector: { app: inference-py }
+  ports:
+    - { name: grpc, port: 50051, targetPort: 50051, protocol: TCP }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-py-headless
+  namespace: inference
+spec:
+  clusterIP: None
+  selector: { app: inference-py }
+  ports:
+    - { name: grpc, port: 50051, targetPort: 50051, protocol: TCP }

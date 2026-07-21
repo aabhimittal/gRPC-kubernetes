@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-py
+  namespace: inference
+  labels: { app: inference-py }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: inference-py }
+  template:
+    metadata:
+      labels: { app: inference-py }
+    spec:
+      terminationGracePeriodSeconds: 20
+      containers:
+        - name: server
+          image: inference-py:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: grpc, containerPort: 50051 }
+          envFrom:
+            - configMapRef: { name: inference-config }
+          resources:
+            requests: { cpu: "250m", memory: "128Mi" }
+            limits:   { cpu: "1",    memory: "256Mi" }
+          # Native gRPC probes call InferenceService.HealthCheck via the
+          # standard grpc.health.v1 port; readiness waits for model warm-up.
+          readinessProbe:
+            grpc: { port: 50051 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc: { port: 50051 }
+            initialDelaySeconds: 10
+            periodSeconds: 10

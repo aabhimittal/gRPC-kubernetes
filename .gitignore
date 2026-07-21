@@ -1,0 +1,19 @@
+# Generated protobuf stubs (regenerated via `make gen`)
+python/gen/inference_pb2.py
+python/gen/inference_pb2_grpc.py
+python/gen/*.pyi
+go/gen/inferencev1/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Go
+/go/bin/
+*.test
+
+# Misc
+*.bak
+.DS_Store

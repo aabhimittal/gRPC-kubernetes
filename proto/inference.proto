@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package inference.v1;
+
+option go_package = "github.com/aabhimittal/grpc-kubernetes/go/gen/inferencev1;inferencev1";
+
+// InferenceService exposes model prediction over gRPC.
+// The API is designed for the optimizations described in docs/HLD.md and
+// docs/LLD.md: server-side dynamic batching, streaming, and cheap health
+// probes for Kubernetes.
+service InferenceService {
+  // Unary predict. Requests may be transparently coalesced into a batch on
+  // the server before hitting the model (dynamic batching).
+  rpc Predict(PredictRequest) returns (PredictResponse);
+
+  // Bi-directional stream: client pushes a sequence of feature vectors and
+  // receives predictions as they complete. Amortizes connection + batching
+  // overhead across many inputs on one HTTP/2 stream.
+  rpc PredictStream(stream PredictRequest) returns (stream PredictResponse);
+
+  // Lightweight liveness/readiness probe used by Kubernetes.
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
+
+message PredictRequest {
+  // Opaque correlation id echoed back on the response.
+  string request_id = 1;
+  // Dense feature vector fed to the model.
+  repeated float features = 2;
+  // Optional model version pin; empty = server default.
+  string model_version = 3;
+}
+
+message PredictResponse {
+  string request_id = 1;
+  // Output scores / logits.
+  repeated float scores = 2;
+  // Argmax label index for convenience.
+  int32 label = 3;
+  // Version that actually served the request.
+  string model_version = 4;
+  // Server-measured queue + compute latency in milliseconds.
+  double server_latency_ms = 5;
+  // Number of requests the model processed in the batch this one landed in.
+  int32 batch_size = 6;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  enum Status {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+  }
+  Status status = 1;
+  string model_version = 2;
+}
