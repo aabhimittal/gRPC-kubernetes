@@ -1,0 +1,23 @@
+# Voluntary disruptions (node drains, cluster upgrades) must not take the
+# backend below one serving replica. Without this, a drain can evict both pods
+# at once and the Service goes empty while replacements warm up.
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inference-go
+  namespace: inference
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: inference-go }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inference-py
+  namespace: inference
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: inference-py }

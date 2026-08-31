@@ -12,6 +12,7 @@ spec:
   selector: { app: inference-go }
   ports:
     - { name: grpc, port: 50051, targetPort: 50051, protocol: TCP }
+    - { name: metrics, port: 9090, targetPort: 9090, protocol: TCP }
 ---
 apiVersion: v1
 kind: Service
@@ -33,6 +34,7 @@ spec:
   selector: { app: inference-py }
   ports:
     - { name: grpc, port: 50051, targetPort: 50051, protocol: TCP }
+    - { name: metrics, port: 9090, targetPort: 9090, protocol: TCP }
 ---
 apiVersion: v1
 kind: Service

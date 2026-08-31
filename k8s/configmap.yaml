@@ -4,8 +4,42 @@ metadata:
   name: inference-config
   namespace: inference
 data:
-  # Batching tunables — see docs/LLD.md §2 & §7.
-  MAX_BATCH: "32"
-  MAX_DELAY_MS: "5"
-  MODEL_VERSION: "v1"
   PORT: "50051"
+  METRICS_PORT: "9090"
+
+  # --- Batching (docs/LLD.md §2 & §7) --------------------------------------
+  MAX_BATCH: "32"
+  # Upper bound on how long the first request in a window waits for company.
+  MAX_DELAY_MS: "5"
+  # Floor the adaptive controller may shrink the window to under load.
+  MIN_DELAY_US: "200"
+  ADAPTIVE_BATCHING: "1"
+
+  # --- Admission control ---------------------------------------------------
+  # Queue depth before the server sheds with RESOURCE_EXHAUSTED. Sized so the
+  # worst-case wait (MAX_QUEUE / throughput) stays inside a client deadline:
+  # past that point queueing only produces answers nobody is waiting for.
+  MAX_QUEUE: "1024"
+  # In-flight requests allowed per bidirectional stream.
+  STREAM_CONCURRENCY: "32"
+
+  # --- Models --------------------------------------------------------------
+  # Comma-separated "name[:seed]" list; every version listed is resident and
+  # warmed. Pin one per request with PredictRequest.model_version — that is how
+  # a canary takes traffic without a redeploy.
+  MODEL_VERSIONS: "v1"
+  MODEL_VERSION: "v1"
+
+  # --- Transport (docs/LLD.md §5) ------------------------------------------
+  KEEPALIVE_MS: "30000"
+  # Recycle connections so a scale-out actually rebalances long-lived HTTP/2
+  # channels instead of leaving new pods idle.
+  MAX_CONN_AGE_MS: "300000"
+  MAX_MSG_BYTES: "4194304"
+  MAX_CONCURRENT_STREAMS: "1000"
+
+  # --- Shutdown (docs/LLD.md §6) -------------------------------------------
+  # Keep serving this long after readiness flips, so in-flight requests and
+  # slow endpoint propagation do not turn a rollout into client-visible errors.
+  PRESTOP_SLEEP_MS: "3000"
+  GRACE_MS: "10000"
