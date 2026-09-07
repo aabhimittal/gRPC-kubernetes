@@ -1,4 +1,4 @@
-.PHONY: help gen gen-python gen-go py-run go-run docker k8s-deploy k8s-delete clean
+.PHONY: help gen gen-python gen-go py-run go-run test test-py test-go lint parity docker k8s-deploy k8s-delete clean
 
 IMG_PY ?= inference-py:latest
 IMG_GO ?= inference-go:latest
@@ -27,6 +27,21 @@ py-run: gen-python ## Run the Python server locally
 
 go-run: gen-go ## Run the Go server locally
 	cd go && go run ./cmd/server
+
+test: test-py test-go ## Run every test suite
+
+test-py: gen-python ## Python unit + end-to-end gRPC tests
+	python -m pytest python/tests -q
+
+test-go: ## Go unit + end-to-end gRPC tests (race detector on)
+	cd go && go test -race ./...
+
+lint: ## Formatting / vet / manifest checks that CI enforces
+	cd go && gofmt -l . && go vet ./...
+	python scripts/validate_manifests.py
+
+parity: ## Regenerate the cross-language golden vectors in testdata/
+	python scripts/gen_parity.py
 
 docker: ## Build both images (build context = repo root)
 	docker build -f python/Dockerfile -t $(IMG_PY) .

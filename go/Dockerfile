@@ -25,8 +25,13 @@ RUN protoc -I./proto \
 WORKDIR /src/go
 RUN go mod tidy && CGO_ENABLED=0 go build -o /out/server ./cmd/server
 
-FROM gcr.io/distroless/static-debian12
+# :nonroot runs as uid 65532, matching the k8s securityContext.
+FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/server /server
-ENV PORT=50051 MAX_BATCH=32 MAX_DELAY_MS=5 MODEL_VERSION=v1
-EXPOSE 50051
+ENV PORT=50051 METRICS_PORT=9090 \
+    MAX_BATCH=32 MAX_DELAY_MS=5 MIN_DELAY_US=200 ADAPTIVE_BATCHING=1 \
+    MAX_QUEUE=1024 STREAM_CONCURRENCY=32 \
+    MODEL_VERSIONS=v1 MODEL_VERSION=v1 \
+    PRESTOP_SLEEP_MS=3000 GRACE_MS=10000
+EXPOSE 50051 9090
 ENTRYPOINT ["/server"]

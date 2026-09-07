@@ -1,6 +1,12 @@
-# CPU-based HPA. For production, expose queue depth as a custom metric and
-# scale on it instead (docs/HLD.md §4.6) — batching handles per-pod efficiency,
-# HPA handles fleet-level load.
+# CPU-based HPA. For production, scale on queue depth instead — the server
+# already publishes `inference_queue_depth` on /metrics, and queue depth leads
+# CPU by the length of the batch window (docs/HLD.md §4.6). Batching handles
+# per-pod efficiency; the HPA handles fleet-level load.
+#
+# The `behavior` block matters as much as the target: inference pods pay a
+# warm-up cost, so scaling up must be quick and scaling down deliberate.
+# Without it the default 5-minute down-stabilisation still lets a bursty
+# workload thrash pods that never finish warming.
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -19,6 +25,27 @@ spec:
       resource:
         name: cpu
         target: { type: Utilization, averageUtilization: 60 }
+    # With a metrics adapter installed, prefer the signal the server publishes:
+    # - type: Pods
+    #   pods:
+    #     metric: { name: inference_queue_depth }
+    #     target: { type: AverageValue, averageValue: "8" }
+  behavior:
+    scaleUp:
+      # React fast to a burst: a cold pod is useless for the first seconds, so
+      # start it before the queue backs up.
+      stabilizationWindowSeconds: 30
+      policies:
+        - { type: Percent, value: 100, periodSeconds: 30 }
+        - { type: Pods, value: 4, periodSeconds: 30 }
+      selectPolicy: Max
+    scaleDown:
+      # Retreat slowly: shedding a pod that is still draining long-lived
+      # streams costs more than the node-hours it saves.
+      stabilizationWindowSeconds: 300
+      policies:
+        - { type: Pods, value: 1, periodSeconds: 60 }
+
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -37,3 +64,24 @@ spec:
       resource:
         name: cpu
         target: { type: Utilization, averageUtilization: 60 }
+    # With a metrics adapter installed, prefer the signal the server publishes:
+    # - type: Pods
+    #   pods:
+    #     metric: { name: inference_queue_depth }
+    #     target: { type: AverageValue, averageValue: "8" }
+  behavior:
+    scaleUp:
+      # React fast to a burst: a cold pod is useless for the first seconds, so
+      # start it before the queue backs up.
+      stabilizationWindowSeconds: 30
+      policies:
+        - { type: Percent, value: 100, periodSeconds: 30 }
+        - { type: Pods, value: 4, periodSeconds: 30 }
+      selectPolicy: Max
+    scaleDown:
+      # Retreat slowly: shedding a pod that is still draining long-lived
+      # streams costs more than the node-hours it saves.
+      stabilizationWindowSeconds: 300
+      policies:
+        - { type: Pods, value: 1, periodSeconds: 60 }
+

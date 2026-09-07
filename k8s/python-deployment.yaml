@@ -6,31 +6,69 @@ metadata:
   labels: { app: inference-py }
 spec:
   replicas: 2
+  # A rollout must never drop below the current capacity: surge first, then
+  # retire, so a burst arriving mid-deploy still has somewhere to land.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
   selector:
     matchLabels: { app: inference-py }
   template:
     metadata:
       labels: { app: inference-py }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
     spec:
-      terminationGracePeriodSeconds: 20
+      # Must exceed PRESTOP_SLEEP_MS + GRACE_MS, or the kubelet SIGKILLs the
+      # pod in the middle of its own drain.
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      # Spread replicas across nodes: a single node loss must not take the
+      # whole backend with it.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: inference-py }
       containers:
         - name: server
           image: inference-py:latest
           imagePullPolicy: IfNotPresent
           ports:
             - { name: grpc, containerPort: 50051 }
+            - { name: metrics, containerPort: 9090 }
           envFrom:
             - configMapRef: { name: inference-config }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
           resources:
             requests: { cpu: "250m", memory: "128Mi" }
             limits:   { cpu: "1",    memory: "256Mi" }
-          # Native gRPC probes call InferenceService.HealthCheck via the
-          # standard grpc.health.v1 port; readiness waits for model warm-up.
+          # Startup probe covers model warm-up, so a cold-start that is slower
+          # than usual is not mistaken for a hung process and killed.
+          startupProbe:
+            grpc: { port: 50051 }
+            periodSeconds: 2
+            failureThreshold: 30
+          # Native gRPC probes call the standard grpc.health.v1 service;
+          # readiness reports NOT_SERVING until warm-up finishes and again as
+          # soon as shutdown begins.
           readinessProbe:
             grpc: { port: 50051 }
-            initialDelaySeconds: 3
             periodSeconds: 5
+            failureThreshold: 2
           livenessProbe:
             grpc: { port: 50051 }
-            initialDelaySeconds: 10
             periodSeconds: 10
+            failureThreshold: 3
+          # No preStop exec hook on purpose: the image has no shell, and the
+          # server itself flips readiness to NOT_SERVING and then keeps serving
+          # for PRESTOP_SLEEP_MS while endpoint removal propagates.
